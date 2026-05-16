@@ -1,12 +1,28 @@
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { OWNER_NAME } from "@/constants";
-import type { 
-  BrokerRow, 
-  Employee, 
-  SubBroker, 
-  EmployeeRollup 
-} from "@/types/brokerage";
+
+export type BrokerRow = {
+  code: string;
+  name: string;
+  gross: number;
+  share: number;
+  net: number;
+};
+
+export type Employee = {
+  id: string;
+  name: string;
+  code: string | null;
+  is_default: boolean;
+};
+
+export type SubBroker = {
+  id: string;
+  code: string;
+  name: string | null;
+  tag: string | null;
+  employee_id: string | null;
+};
 
 const num = (v: unknown): number => {
   if (v === null || v === undefined || v === "") return 0;
@@ -15,7 +31,10 @@ const num = (v: unknown): number => {
 };
 
 // Parse the SSJ Brokerage Analysis Report. Returns { date, rows }.
-export function parseBrokerageWorkbook(buf: ArrayBuffer): { date: string | null; rows: BrokerRow[] } {
+export function parseBrokerageWorkbook(buf: ArrayBuffer): {
+  date: string | null;
+  rows: BrokerRow[];
+} {
   const wb = XLSX.read(buf, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
@@ -37,7 +56,11 @@ export function parseBrokerageWorkbook(buf: ArrayBuffer): { date: string | null;
   // Find header row "Code" col
   let headerIdx = -1;
   for (let i = 0; i < Math.min(aoa.length, 20); i++) {
-    if (String(aoa[i]?.[0] ?? "").trim().toLowerCase() === "code") {
+    if (
+      String(aoa[i]?.[0] ?? "")
+        .trim()
+        .toLowerCase() === "code"
+    ) {
       headerIdx = i;
       break;
     }
@@ -70,17 +93,16 @@ export function tagFromCode(code: string): string | null {
   return null;
 }
 
-/**
- * Compute the brokerage split per employee.
- *
- * Rules:
- *  - Each non-default employee gets 100% of their own code's net + 50% of mapped sub-brokers' net.
- *  - Ganpat Bedawala (the default/catch-all employee) gets:
- *      1) 100% of his own code (SSJ1073)
- *      2) 50% of ALL mapped sub-brokers across ALL employees (the "other half")
- *      3) 100% of ALL unmapped broker codes (codes that are neither an employee's own code
- *         nor explicitly mapped to any employee)
- */
+export type EmployeeRollup = {
+  employee_id: string;
+  employee_name: string;
+  own_code: string | null;
+  own_net: number; // 100%
+  shared_net: number; // 50% of mapped sub-brokers
+  total: number;
+  mapped_codes: string[];
+};
+
 export function computeEmployeeRollup(
   brokers: BrokerRow[],
   employees: Employee[],
@@ -94,7 +116,7 @@ export function computeEmployeeRollup(
 
   const defaultEmp = employees.find((e) => e.is_default) ?? null;
 
-  // Build emp -> sub list (explicit mappings only, NOT default catch-all)
+  // Build emp -> sub list (explicit mappings)
   const empSubs = new Map<string, string[]>();
   for (const s of subs) {
     if (s.employee_id) {
@@ -104,101 +126,71 @@ export function computeEmployeeRollup(
     }
   }
 
-  // Codes assigned to employees as own codes
+  // Codes assigned to employees as own codes (exclude from default catch-all)
   const ownCodes = new Set(
     employees.filter((e) => e.code).map((e) => e.code!.trim().toUpperCase()),
   );
 
-  // ALL explicitly mapped sub-broker codes (mapped to any employee via sub_brokers table)
-  const allMappedCodes = new Set(
-    subs.filter((s) => s.employee_id).map((s) => s.code.trim().toUpperCase()),
-  );
-
-  // Unmapped: all broker codes that are neither an employee own code nor explicitly mapped
-  const unmappedCodes: string[] = [];
-  for (const r of brokers) {
-    const c = r.code.trim().toUpperCase();
-    if (ownCodes.has(c)) continue;       // employee's own code
-    if (allMappedCodes.has(c)) continue;  // explicitly mapped to an employee
-    unmappedCodes.push(r.code);
+  // Catch-all: all brokers not mapped to anyone and not an employee's own code
+  const unmappedForDefault: string[] = [];
+  if (defaultEmp) {
+    for (const r of brokers) {
+      const c = r.code.trim().toUpperCase();
+      if (ownCodes.has(c)) continue;
+      const sb = subByCode.get(c);
+      if (sb && sb.employee_id) continue; // already mapped
+      unmappedForDefault.push(r.code);
+    }
   }
 
-  // ---- Build rollup for non-default employees ----
-  const out: EmployeeRollup[] = employees
-    .filter((e) => !e.is_default)
-    .map((e) => {
-      const ownRow = e.code ? byCode.get(e.code.trim().toUpperCase()) : undefined;
-      const own_net = ownRow?.net ?? 0;
-      const mapped = empSubs.get(e.id) ?? [];
+  const out: EmployeeRollup[] = employees.map((e) => {
+    const ownRow = e.code ? byCode.get(e.code.trim().toUpperCase()) : undefined;
+    const own_net = ownRow?.net ?? 0;
+    const mapped = empSubs.get(e.id) ?? [];
+    let shared_net = 0;
 
-      // Employee gets 50% of their mapped sub-brokers
-      const shared_net = mapped.reduce((sum, c) => {
+    if (e.is_default) {
+      // 100% of his own mapped codes
+      shared_net += mapped.reduce((sum, c) => {
+        const row = byCode.get(c.trim().toUpperCase());
+        return sum + (row ? row.net : 0);
+      }, 0);
+
+      // 100% of unmapped codes
+      shared_net += unmappedForDefault.reduce((sum, c) => {
+        const row = byCode.get(c.trim().toUpperCase());
+        return sum + (row ? row.net : 0);
+      }, 0);
+
+      // 50% of other employees' mapped codes
+      for (const [empId, codes] of empSubs.entries()) {
+        if (empId !== e.id) {
+          shared_net += codes.reduce((sum, c) => {
+            const row = byCode.get(c.trim().toUpperCase());
+            return sum + (row ? row.net * 0.5 : 0);
+          }, 0);
+        }
+      }
+    } else {
+      // Normal employee gets 50% of their mapped codes
+      shared_net += mapped.reduce((sum, c) => {
         const row = byCode.get(c.trim().toUpperCase());
         return sum + (row ? row.net * 0.5 : 0);
       }, 0);
+    }
 
-      // The other 50% of this employee's mapped sub-brokers goes to Ganpat
-      const ganpat_net = shared_net; // same amount (the other 50%)
-
-      return {
-        employee_id: e.id,
-        employee_name: e.name,
-        own_code: e.code,
-        own_net,
-        shared_net,
-        ganpat_net,
-        total: own_net + shared_net,
-        mapped_codes: mapped,
-      };
-    });
-
-  // ---- Build rollup for default employee (Ganpat Bedawala) ----
-  if (defaultEmp) {
-    const ownRow = defaultEmp.code
-      ? byCode.get(defaultEmp.code.trim().toUpperCase())
-      : undefined;
-    const own_net = ownRow?.net ?? 0;
-
-    // Ganpat gets 100% of ALL unmapped codes
-    const unmapped_net = unmappedCodes.reduce((sum, c) => {
-      const row = byCode.get(c.trim().toUpperCase());
-      return sum + (row?.net ?? 0);
-    }, 0);
-
-    // Ganpat also gets 50% of ALL mapped sub-brokers (from all employees)
-    const mapped_50_net = Array.from(allMappedCodes).reduce((sum, c) => {
-      const row = byCode.get(c);
-      return sum + (row ? row.net * 0.5 : 0);
-    }, 0);
-
-    // For display: shared_net = total from unmapped + 50% from mapped
-    // ganpat_net stays 0 for the default row (Ganpat IS the recipient)
-    const total_ganpat = own_net + unmapped_net + mapped_50_net;
-
-    out.push({
-      employee_id: defaultEmp.id,
-      employee_name: defaultEmp.name,
-      own_code: defaultEmp.code,
+    return {
+      employee_id: e.id,
+      employee_name: e.name,
+      own_code: e.code,
       own_net,
-      shared_net: unmapped_net + mapped_50_net, // what Ganpat receives from subs
-      ganpat_net: 0, // Ganpat doesn't pay himself
-      total: total_ganpat,
-      mapped_codes: unmappedCodes,
-    });
-  }
+      shared_net,
+      total: own_net + shared_net,
+      mapped_codes: e.is_default ? mapped.concat(unmappedForDefault) : mapped,
+    };
+  });
 
   return out.sort((a, b) => b.total - a.total);
-}
-
-/**
- * Compute total Ganpat Bedawala share.
- * This is the default employee's total (own + 100% unmapped + 50% all mapped).
- */
-export function computeGanpatTotal(rollup: EmployeeRollup[]): number {
-  const ganpatRow = rollup.find(
-    (r) => r.employee_name.toUpperCase().includes("GANPAT") || r.ganpat_net === 0,
-  );
-  return ganpatRow?.total ?? 0;
 }
 
 export function fmt(n: number): string {
@@ -206,7 +198,10 @@ export function fmt(n: number): string {
 }
 
 // CSV/XLSX downloads
-export function downloadXlsx(filename: string, sheets: { name: string; rows: Record<string, unknown>[] }[]) {
+export function downloadXlsx(
+  filename: string,
+  sheets: { name: string; rows: Record<string, unknown>[] }[],
+) {
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
     const ws = XLSX.utils.json_to_sheet(s.rows);

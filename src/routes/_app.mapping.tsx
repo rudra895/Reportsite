@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
-import type { Employee, SubBroker } from "@/types/brokerage";
+import type { Employee, SubBroker } from "@/lib/brokerage";
 
 export const Route = createFileRoute("/_app/mapping")({
   component: MappingPage,
@@ -41,10 +41,7 @@ function MappingPage() {
   }, []);
 
   const updateSubEmployee = async (id: string, employee_id: string | null) => {
-    const { error } = await supabase
-      .from("sub_brokers")
-      .update({ employee_id })
-      .eq("id", id);
+    const { error } = await supabase.from("sub_brokers").update({ employee_id }).eq("id", id);
     if (error) return toast.error(error.message);
     setSubs((cur) => cur.map((s) => (s.id === id ? { ...s, employee_id } : s)));
   };
@@ -99,8 +96,7 @@ function MappingPage() {
       (s.name ?? "").toLowerCase().includes(filter.toLowerCase()),
   );
 
-  const empName = (id: string | null) =>
-    employees.find((e) => e.id === id)?.name ?? null;
+  const empName = (id: string | null) => employees.find((e) => e.id === id)?.name ?? null;
 
   return (
     <div className="space-y-6">
@@ -108,7 +104,8 @@ function MappingPage() {
         <CardHeader>
           <CardTitle>Employees</CardTitle>
           <CardDescription>
-            Manage employees and their personal broker code. The "default" employee absorbs all unmapped sub-brokers.
+            Manage employees and their personal broker code. The "default" employee absorbs all
+            unmapped sub-brokers.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -130,8 +127,7 @@ function MappingPage() {
                       <Input
                         defaultValue={e.name}
                         onBlur={(ev) =>
-                          ev.target.value !== e.name &&
-                          updateEmp(e.id, { name: ev.target.value })
+                          ev.target.value !== e.name && updateEmp(e.id, { name: ev.target.value })
                         }
                       />
                     </td>
@@ -231,7 +227,9 @@ function MappingPage() {
                       >
                         <SelectTrigger className="w-56">
                           <SelectValue>
-                            {empName(s.employee_id) ?? <span className="text-muted-foreground">— Unmapped —</span>}
+                            {empName(s.employee_id) ?? (
+                              <span className="text-muted-foreground">— Unmapped —</span>
+                            )}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>

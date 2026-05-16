@@ -80,7 +80,10 @@ function CalendarPage() {
     }));
   };
 
-  const monthName = new Date(year, month).toLocaleString("en-US", { month: "long", year: "numeric" });
+  const monthName = new Date(year, month).toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 
   const stats = useMemo(() => {
     const days = Object.values(data);
@@ -131,12 +134,18 @@ function CalendarPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex gap-4 text-sm">
-            <span className="text-muted-foreground">Uploaded: <strong className="text-foreground">{stats.uploaded}</strong></span>
-            <span className="text-muted-foreground">Holidays: <strong className="text-foreground">{stats.holidays}</strong></span>
+            <span className="text-muted-foreground">
+              Uploaded: <strong className="text-foreground">{stats.uploaded}</strong>
+            </span>
+            <span className="text-muted-foreground">
+              Holidays: <strong className="text-foreground">{stats.holidays}</strong>
+            </span>
           </div>
           <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className="py-2">{d}</div>
+              <div key={d} className="py-2">
+                {d}
+              </div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-1">
@@ -151,7 +160,9 @@ function CalendarPage() {
                   className={cn(
                     "relative aspect-square rounded-md border bg-card p-2 text-left text-sm transition-colors hover:bg-accent",
                     info?.isHoliday && "border-destructive/40 bg-destructive/10",
-                    info?.hasUpload && !info?.isHoliday && "border-emerald-500/40 bg-emerald-500/10",
+                    info?.hasUpload &&
+                      !info?.isHoliday &&
+                      "border-emerald-500/40 bg-emerald-500/10",
                   )}
                 >
                   <div className="font-medium">{day}</div>
@@ -162,7 +173,9 @@ function CalendarPage() {
                     <div className="mt-1 text-[10px] uppercase text-destructive">Holiday</div>
                   )}
                   {info?.rowCount > 0 && (
-                    <div className="mt-1 text-[10px] text-muted-foreground">{info.rowCount} rows</div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {info.rowCount} rows
+                    </div>
                   )}
                 </button>
               );

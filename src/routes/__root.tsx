@@ -74,10 +74,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "SSJ Brokerage PA Agent" },
-      { name: "description", content: "Internal PA agent for SSJ brokerage tracking, mapping and reporting." },
+      {
+        name: "description",
+        content: "Internal PA agent for SSJ brokerage tracking, mapping and reporting.",
+      },
       { name: "author", content: "SSJ" },
       { property: "og:title", content: "SSJ Brokerage PA Agent" },
-      { property: "og:description", content: "Brokerage tracking, employee mapping and downloadable reports." },
+      {
+        property: "og:description",
+        content: "Brokerage tracking, employee mapping and downloadable reports.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },

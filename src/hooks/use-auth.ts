@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-
-import { AUTH_STORAGE_KEY } from "@/constants";
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -20,16 +18,5 @@ export function useAuth() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Fallback: check hardcoded auth from localStorage
-  const hardcodedAuth = (() => {
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch { /* ignore */ }
-    return null;
-  })();
-
-  const user = session?.user ?? (hardcodedAuth?.authed ? { email: hardcodedAuth.email, id: "hardcoded" } as unknown as User : null);
-
-  return { session, user, loading };
+  return { session, user: session?.user ?? null, loading };
 }
