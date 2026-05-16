@@ -15,13 +15,28 @@ const nav = [
 ] as const;
 
 export function AppLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center">
+        <div className="max-w-lg space-y-3">
+          <h1 className="text-2xl font-semibold text-foreground">App configuration is missing</h1>
+          <p className="text-sm text-muted-foreground">
+            The GitHub Pages build needs public Supabase values before this app can load its data.
+            Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> as
+            repository secrets, then redeploy.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !user) {
     return (

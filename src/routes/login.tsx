@@ -15,7 +15,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("ganpat.b@ssjfinance.com");
   const [password, setPassword] = useState("Ganpat@98");
@@ -74,6 +74,11 @@ function LoginPage() {
           <CardDescription>
             {mode === "signin" ? "Sign in to your admin panel" : "Create your admin account"}
           </CardDescription>
+          {error ? (
+            <p className="text-sm text-destructive">
+              Missing Supabase config. Add the GitHub Actions secrets before trying to sign in.
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">
